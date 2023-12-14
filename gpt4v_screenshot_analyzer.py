@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# C:/Users/jorda/AppData/Local/Programs/Python/Python311/python.exe -m pip install
 
 import subprocess
 import base64
@@ -8,10 +9,14 @@ import keyboard
 import time
 import tkinter as tk
 from PIL import Image, ImageTk
+import os
+import pyautogui
+from pynput import mouse
 
 # OpenAI API Key
-api_key = "your-api-key-here"
-
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise ValueError("No OpenAI API key found in environment variables")
 # Function to encode the image
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
@@ -66,7 +71,8 @@ def on_click(x, y, button, pressed):
         start_x, start_y = x, y
     else:
         end_x, end_y = x, y
-        return False  # Stop listener
+        # Stop listener
+        return False
 
 def display_result(image_path, text):
     def run_window():
@@ -152,9 +158,33 @@ def take_screenshot():
     global start_x, start_y, end_x, end_y
     screenshot_path = "screenshot.png"
 
-    subprocess.run(["gnome-screenshot", "-f", screenshot_path, "-a", 
-                    f"{start_x},{start_y},{end_x - start_x},{end_y - start_y}"])
-    print("Screenshot taken!")
+    # Correct negative width or height
+    width = abs(end_x - start_x)
+    height = abs(end_y - start_y)
+    x = min(start_x, end_x)
+    y = min(start_y, end_y)
+
+    # Ensure the region is within the screen bounds
+    screen_width, screen_height = pyautogui.size()
+    width = min(width, screen_width - x)
+    height = min(height, screen_height - y)
+
+    # Check for positive dimensions
+    if width <= 0 or height <= 0:
+        print("Invalid screenshot dimensions. Please select a valid region.")
+        return
+
+    # Log the screenshot dimensions and coordinates
+    print(f"Taking screenshot with region: x={x}, y={y}, width={width}, height={height}")
+
+    # Take a screenshot of the specified region
+    try:
+        screenshot = pyautogui.screenshot(region=(x, y, width, height))
+        screenshot.save(screenshot_path)
+        print("Screenshot taken!")
+    except Exception as e:
+        print(f"Error taking screenshot: {e}")
+        return
     time.sleep(1)
     base64_image = encode_image(screenshot_path)
     description = get_image_description(base64_image)
@@ -163,7 +193,10 @@ def take_screenshot():
 # Hotkey function
 def hotkey_function():
     print("Hotkey pressed! Drag to select screenshot area...")
+    with mouse.Listener(on_click=on_click) as listener:
+        listener.join()
     take_screenshot()
+
 
 # Hotkey listener thread
 def hotkey_listener():
